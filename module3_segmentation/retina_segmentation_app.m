@@ -1,458 +1,590 @@
 function retina_segmentation_app()
-% RETINA_SEGMENTATION_APP Programmatic MATLAB dashboard for RetinaScan Module 3.
+% RETINA_SEGMENTATION_APP Advanced Interactive UI Dashboard for RetinaScan Module 3.
 %
-% This application provides a graphical user interface (GUI) to load retinal
-% fundus images, configure segmentation parameters, execute the pipeline,
-% and visualize interactive overlays (vessels, disc/cup, fovea, lesions) 
-% alongside quantitative metrics and the Vessel Abnormality Score.
-%
-% Run this function directly in MATLAB to launch the dashboard.
+% Features:
+%   1. Real-time Multi-Layer Visibility Checkboxes (Vessels, Disc, Cup, Fovea, Lesions).
+%   2. Live Alpha-Blending Transparency Slider (0% to 100%).
+%   3. Side-by-Side Dual Synchronized Viewports (Original vs Analysis).
+%   4. Embedded Vessel Abnormality Score Graphical Breakdown Chart.
+%   5. 4 Clinical Case Presets (Normal, Mild DR, Severe DR, High Tortuosity).
+%   6. Interactive Click-to-Probe / Diagnostic Inspector for pixel annotations.
+%   7. One-Click Clinical Screening Report Exporter (PNG).
 
     % Create the main UI Figure
-    fig = uifigure('Name', 'RetinaScan — Retinal & Lesion Segmentation UI Dashboard', ...
-                   'Position', [100, 100, 1200, 850], ...
-                   'Color', [0.12, 0.12, 0.14]); % Modern dark theme
+    fig = uifigure('Name', 'RetinaScan — Retinal & Lesion Segmentation Interactive Dashboard', ...
+                   'Position', [50, 50, 1380, 880], ...
+                   'Color', [0.10, 0.10, 0.12]); % Sleek medical dark mode
                
-    % Main Grid Layout (1 row, 2 columns: Left Controls, Right Display)
+    % Main Layout (1 row, 2 columns: 380px Sidebar, 1x Visualization Canvas)
     mainGrid = uigridlayout(fig, [1, 2]);
-    mainGrid.ColumnWidth = {340, '1x'};
+    mainGrid.ColumnWidth = {400, '1x'};
     mainGrid.RowHeight = {'1x'};
-    mainGrid.BackgroundColor = [0.12, 0.12, 0.14];
+    mainGrid.BackgroundColor = [0.10, 0.10, 0.12];
 
     % --- STATE VARIABLES ---
     currentImage = [];
     resultsData = [];
     overlayNormal = [];
     overlayTort = [];
+    currentPreset = 'Normal';
     
-    % --- LEFT CONTROL PANEL ---
-    controlPanel = uipanel(mainGrid, 'Title', 'RetinaScan Control & Metrics', ...
-                           'BackgroundColor', [0.16, 0.16, 0.18], ...
-                           'ForegroundColor', [0.95, 0.95, 0.95], ...
-                           'FontWeight', 'bold', ...
-                           'FontSize', 12);
+    % --- SIDEBAR CONTROL PANEL (SCROLLABLE) ---
+    controlPanel = uipanel(mainGrid, 'Title', 'RETINASCAN CONTROL & DIAGNOSTICS', ...
+                           'BackgroundColor', [0.14, 0.14, 0.16], ...
+                           'ForegroundColor', [0.0, 0.8, 1.0], ...
+                           'FontWeight', 'bold', 'FontSize', 11, ...
+                           'Scrollable', 'on');
     controlPanel.Layout.Column = 1;
     
-    % Scrollable Grid inside Left Panel
-    controlGrid = uigridlayout(controlPanel, [12, 1]);
-    controlGrid.RowHeight = {40, 45, 40, 60, 50, 110, 110, 110, 120, '1x'};
-    controlGrid.BackgroundColor = [0.16, 0.16, 0.18];
+    controlGrid = uigridlayout(controlPanel, [14, 1]);
+    controlGrid.RowHeight = {35, 35, 45, 40, 45, 120, 110, 150, 110, 110, 110, 130, 40, 40};
+    controlGrid.BackgroundColor = [0.14, 0.14, 0.16];
     
-    % Title Banner
-    lblTitle = uilabel(controlGrid, 'Text', 'RetinaScan Segmentation', ...
-                       'FontWeight', 'bold', 'FontSize', 16, ...
-                       'TextColor', [0.0, 0.8, 1.0], ...
+    % 1. Header Banner
+    lblTitle = uilabel(controlGrid, 'Text', 'RetinaScan XAI Screening', ...
+                       'FontWeight', 'bold', 'FontSize', 15, ...
+                       'TextColor', [0.0, 0.9, 1.0], ...
                        'HorizontalAlignment', 'center');
     lblTitle.Layout.Row = 1;
     
-    % Load Image Button
-    btnLoad = uibutton(controlGrid, 'push', 'Text', '📁 Load Fundus Image', ...
-                       'BackgroundColor', [0.22, 0.25, 0.3], ...
+    % 2. Clinical Case Preset Dropdown
+    presetGrid = uigridlayout(controlGrid, [1, 2]);
+    presetGrid.ColumnWidth = {110, '1x'};
+    presetGrid.Padding = [0 0 0 0];
+    presetGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    presetGrid.Layout.Row = 2;
+    
+    uilabel(presetGrid, 'Text', 'Case Preset:', 'TextColor', [0.8, 0.8, 0.8], 'FontWeight', 'bold');
+    ddPreset = uidropdown(presetGrid, ...
+        'Items', {'Normal Healthy Retina', 'Mild NPDR (Early MAs)', 'Severe DR (Exudates + Hems)', 'High Vessel Tortuosity'}, ...
+        'Value', 'Normal Healthy Retina', ...
+        'BackgroundColor', [0.2, 0.22, 0.26], 'FontColor', [1 1 1], ...
+        'ValueChangedFcn', @(src,~) preset_change_callback(src.Value));
+    
+    % 3. Action Buttons (Load Image & Run Pipeline)
+    btnGrid = uigridlayout(controlGrid, [1, 2]);
+    btnGrid.ColumnWidth = {'1x', '1x'};
+    btnGrid.Padding = [0 0 0 0];
+    btnGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    btnGrid.Layout.Row = 3;
+    
+    btnLoad = uibutton(btnGrid, 'push', 'Text', '📁 Load Image', ...
+                       'BackgroundColor', [0.22, 0.25, 0.32], ...
                        'FontColor', [1, 1, 1], 'FontWeight', 'bold', ...
-                       'FontSize', 11, ...
                        'ButtonPushedFcn', @(~,~) load_image_callback());
-    btnLoad.Layout.Row = 2;
-    
-    % Vessel Sensitivity Label & Slider
-    sliderGrid = uigridlayout(controlGrid, [2, 1]);
-    sliderGrid.RowHeight = {15, 20};
-    sliderGrid.Padding = [0 0 0 0];
-    sliderGrid.BackgroundColor = [0.16, 0.16, 0.18];
-    sliderGrid.Layout.Row = 3;
-    
-    lblSens = uilabel(sliderGrid, 'Text', 'Vessel Sensitivity (default: 0.50):', ...
-                       'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblSens.Layout.Row = 1;
-    
-    sldSens = uislider(sliderGrid, 'Limits', [0.0, 1.0], 'Value', 0.50, ...
-                        'FontColor', [0.8, 0.8, 0.8], ...
-                        'ValueChangedFcn', @(~,~) update_slider_label());
-    sldSens.Layout.Row = 2;
-    
-    % Run Pipeline Button
-    btnRun = uibutton(controlGrid, 'push', 'Text', '⚡ Run Retinal Analysis', ...
-                      'BackgroundColor', [0.0, 0.6, 0.8], ...
+                   
+    btnRun = uibutton(btnGrid, 'push', 'Text', '⚡ Run Analysis', ...
+                      'BackgroundColor', [0.0, 0.65, 0.85], ...
                       'FontColor', [1, 1, 1], 'FontWeight', 'bold', ...
-                      'FontSize', 12, ...
                       'ButtonPushedFcn', @(~,~) run_analysis_callback());
-    btnRun.Layout.Row = 4;
+                  
+    % 4. Sensitivity & Parameter Sliders
+    sensGrid = uigridlayout(controlGrid, [2, 1]);
+    sensGrid.RowHeight = {15, 20};
+    sensGrid.Padding = [0 0 0 0];
+    sensGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    sensGrid.Layout.Row = 4;
     
-    % Abnormality Score Display Panel
-    scorePanel = uipanel(controlGrid, 'Title', 'Vessel Abnormality Indicator', ...
-                         'BackgroundColor', [0.2, 0.2, 0.22], ...
-                         'ForegroundColor', [0.9, 0.9, 0.9], ...
+    lblSens = uilabel(sensGrid, 'Text', 'Vessel Sensitivity: 0.50', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
+    sldSens = uislider(sensGrid, 'Limits', [0.0, 1.0], 'Value', 0.50, ...
+                       'FontColor', [0.8, 0.8, 0.8], ...
+                       'ValueChangedFcn', @(~,~) update_sensitivity_label());
+                   
+    % 5. Layer Overlay Alpha Transparency Slider
+    alphaGrid = uigridlayout(controlGrid, [2, 1]);
+    alphaGrid.RowHeight = {15, 20};
+    alphaGrid.Padding = [0 0 0 0];
+    alphaGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    alphaGrid.Layout.Row = 5;
+    
+    lblAlpha = uilabel(alphaGrid, 'Text', 'Overlay Opacity (Alpha): 60%', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
+    sldAlpha = uislider(alphaGrid, 'Limits', [0.0, 1.0], 'Value', 0.60, ...
+                        'FontColor', [0.8, 0.8, 0.8], ...
+                        'ValueChangedFcn', @(~,~) render_custom_overlay());
+                    
+    % 6. Interactive Multi-Layer Toggle Checkboxes
+    layerPanel = uipanel(controlGrid, 'Title', 'Interactive Layer Toggles', ...
+                         'BackgroundColor', [0.18, 0.18, 0.22], ...
+                         'ForegroundColor', [0.0, 0.9, 1.0], ...
                          'FontWeight', 'bold', 'FontSize', 10);
-    scorePanel.Layout.Row = 5;
-    scoreGrid = uigridlayout(scorePanel, [2, 1]);
-    scoreGrid.RowHeight = {20, 20};
-    scoreGrid.Padding = [5 5 5 5];
-    scoreGrid.BackgroundColor = [0.2, 0.2, 0.22];
+    layerPanel.Layout.Row = 6;
+    layerGrid = uigridlayout(layerPanel, [3, 2]);
+    layerGrid.RowHeight = {22, 22, 22};
+    layerGrid.ColumnWidth = {'1x', '1x'};
+    layerGrid.Padding = [4 4 4 4];
+    layerGrid.BackgroundColor = [0.18, 0.18, 0.22];
     
-    lblScore = uilabel(scoreGrid, 'Text', 'Score: --', ...
+    cbVessels = uicheckbox(layerGrid, 'Text', 'Vessels (Green)', 'Value', true, ...
+                          'FontColor', [0.2, 1.0, 0.4], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+    cbDisc = uicheckbox(layerGrid, 'Text', 'Optic Disc (Blue)', 'Value', true, ...
+                       'FontColor', [0.2, 0.7, 1.0], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+    cbCup = uicheckbox(layerGrid, 'Text', 'Optic Cup (Cyan)', 'Value', true, ...
+                      'FontColor', [0.0, 1.0, 0.9], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+    cbFovea = uicheckbox(layerGrid, 'Text', 'Fovea (Purple)', 'Value', true, ...
+                        'FontColor', [0.9, 0.4, 1.0], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+    cbExudates = uicheckbox(layerGrid, 'Text', 'Exudates (Yellow)', 'Value', true, ...
+                           'FontColor', [1.0, 0.9, 0.2], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+    cbDarkLesions = uicheckbox(layerGrid, 'Text', 'MA / Hems (Red)', 'Value', true, ...
+                              'FontColor', [1.0, 0.3, 0.3], 'ValueChangedFcn', @(~,~) render_custom_overlay());
+                          
+    % 7. Vessel Abnormality Indicator Gauge & Score
+    scorePanel = uipanel(controlGrid, 'Title', 'Vessel Abnormality Score (Differentiator)', ...
+                         'BackgroundColor', [0.18, 0.18, 0.22], ...
+                         'ForegroundColor', [1.0, 0.8, 0.2], ...
+                         'FontWeight', 'bold', 'FontSize', 10);
+    scorePanel.Layout.Row = 7;
+    scoreGrid = uigridlayout(scorePanel, [2, 1]);
+    scoreGrid.RowHeight = {24, 40};
+    scoreGrid.Padding = [4 4 4 4];
+    scoreGrid.BackgroundColor = [0.18, 0.18, 0.22];
+    
+    lblScore = uilabel(scoreGrid, 'Text', 'Abnormality Score: -- / 100', ...
                         'FontWeight', 'bold', 'FontSize', 14, ...
-                        'TextColor', [1, 0.8, 0]);
+                        'TextColor', [1.0, 0.85, 0.1]);
     lblScore.Layout.Row = 1;
     
-    lblInterpretation = uilabel(scoreGrid, 'Text', 'Interpretation: --', ...
-                                 'FontSize', 10, 'TextColor', [0.8, 0.8, 0.8]);
+    lblInterpretation = uilabel(scoreGrid, 'WordWrap', 'on', ...
+                                 'Text', 'Classification: Run analysis to calculate.', ...
+                                 'FontSize', 10, 'TextColor', [0.85, 0.85, 0.85]);
     lblInterpretation.Layout.Row = 2;
     
-    % Structure Metrics Panels (Vessels, Disc, Lesions)
-    vesselPanel = uipanel(controlGrid, 'Title', 'Vascular Metrics', ...
-                           'BackgroundColor', [0.18, 0.18, 0.2], ...
-                           'ForegroundColor', [0.8, 0.95, 0.8]);
-    vesselPanel.Layout.Row = 6;
-    vesselGrid = uigridlayout(vesselPanel, [4, 1]);
-    vesselGrid.RowHeight = {18, 18, 18, 18};
-    vesselGrid.Padding = [5 5 5 5];
-    vesselGrid.BackgroundColor = [0.18, 0.18, 0.2];
+    % 8. Score Breakdown Mini-Bar Chart (Embedded Axes)
+    chartPanel = uipanel(controlGrid, 'Title', 'Score Weight Breakdown', ...
+                         'BackgroundColor', [0.14, 0.14, 0.16], ...
+                         'ForegroundColor', [0.9, 0.9, 0.9], 'FontSize', 9);
+    chartPanel.Layout.Row = 8;
+    chartGrid = uigridlayout(chartPanel, [1, 1]);
+    chartGrid.Padding = [2 2 2 2];
+    chartGrid.BackgroundColor = [0.14, 0.14, 0.16];
     
-    lblVesDensity = uilabel(vesselGrid, 'Text', 'Vessel Density: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblVesDensity.Layout.Row = 1;
-    lblVesLength = uilabel(vesselGrid, 'Text', 'Skeleton Length: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblVesLength.Layout.Row = 2;
-    lblVesBranches = uilabel(vesselGrid, 'Text', 'Branch Points: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblVesBranches.Layout.Row = 3;
-    lblVesWidth = uilabel(vesselGrid, 'Text', 'Vessel Width: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblVesWidth.Layout.Row = 4;
+    axChart = uiaxes(chartGrid, 'Color', [0.14, 0.14, 0.16], ...
+                     'XColor', [0.7 0.7 0.7], 'YColor', [0.7 0.7 0.7]);
+    title(axChart, 'Weights: Tort (50%), Branch (25%), Width (25%)', 'FontSize', 8, 'Color', [0.8 0.8 0.8]);
     
-    discPanel = uipanel(controlGrid, 'Title', 'Optic Disc & Cup', ...
-                         'BackgroundColor', [0.18, 0.18, 0.2], ...
-                         'ForegroundColor', [0.8, 0.8, 0.95]);
-    discPanel.Layout.Row = 7;
-    discGrid = uigridlayout(discPanel, [3, 1]);
-    discGrid.RowHeight = {18, 18, 18};
-    discGrid.Padding = [5 5 5 5];
-    discGrid.BackgroundColor = [0.18, 0.18, 0.2];
+    % 9. Vascular Metrics Panel
+    vesPanel = uipanel(controlGrid, 'Title', 'Vascular Network Features', ...
+                       'BackgroundColor', [0.16, 0.16, 0.18], 'ForegroundColor', [0.8, 0.95, 0.8]);
+    vesPanel.Layout.Row = 9;
+    vesGrid = uigridlayout(vesPanel, [4, 1]);
+    vesGrid.RowHeight = {16, 16, 16, 16};
+    vesGrid.Padding = [4 4 4 4];
+    vesGrid.BackgroundColor = [0.16, 0.16, 0.18];
     
-    lblDiscArea = uilabel(discGrid, 'Text', 'Optic Disc Area: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblDiscArea.Layout.Row = 1;
-    lblCupArea = uilabel(discGrid, 'Text', 'Optic Cup Area: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblCupArea.Layout.Row = 2;
-    lblCDR = uilabel(discGrid, 'Text', 'Cup-to-Disc Ratio (CDR): --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblCDR.Layout.Row = 3;
+    lblVesDensity = uilabel(vesGrid, 'Text', 'Vessel Density: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblVesLength = uilabel(vesGrid, 'Text', 'Skeleton Length: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblVesBranches = uilabel(vesGrid, 'Text', 'Branch Points: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblVesWidth = uilabel(vesGrid, 'Text', 'Vessel Width (CV): --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
     
-    lesionPanel = uipanel(controlGrid, 'Title', 'Lesion Candidates', ...
-                           'BackgroundColor', [0.18, 0.18, 0.2], ...
-                           'ForegroundColor', [0.95, 0.8, 0.8]);
-    lesionPanel.Layout.Row = 8;
-    lesionGrid = uigridlayout(lesionPanel, [3, 1]);
-    lesionGrid.RowHeight = {18, 18, 18};
-    lesionGrid.Padding = [5 5 5 5];
-    lesionGrid.BackgroundColor = [0.18, 0.18, 0.2];
+    % 10. Optic Disc & Fovea Panel
+    odPanel = uipanel(controlGrid, 'Title', 'Optic Disc & Fovea Features', ...
+                      'BackgroundColor', [0.16, 0.16, 0.18], 'ForegroundColor', [0.8, 0.8, 0.95]);
+    odPanel.Layout.Row = 10;
+    odGrid = uigridlayout(odPanel, [3, 1]);
+    odGrid.RowHeight = {16, 16, 16};
+    odGrid.Padding = [4 4 4 4];
+    odGrid.BackgroundColor = [0.16, 0.16, 0.18];
     
-    lblExudate = uilabel(lesionGrid, 'Text', 'Exudates: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblExudate.Layout.Row = 1;
-    lblMA = uilabel(lesionGrid, 'Text', 'Microaneurysms: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblMA.Layout.Row = 2;
-    lblHems = uilabel(lesionGrid, 'Text', 'Hemorrhages: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 10);
-    lblHems.Layout.Row = 3;
+    lblDiscArea = uilabel(odGrid, 'Text', 'Disc Area: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblCupArea = uilabel(odGrid, 'Text', 'Cup Area: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblCDR = uilabel(odGrid, 'Text', 'Cup-to-Disc Ratio (CDR): --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
     
-    % Explainability Text Area
-    explainPanel = uipanel(controlGrid, 'Title', 'Algorithmic Explanations', ...
-                            'BackgroundColor', [0.14, 0.14, 0.16], ...
-                            'ForegroundColor', [0.9, 0.9, 0.9]);
-    explainPanel.Layout.Row = 9;
-    explainGrid = uigridlayout(explainPanel, [1, 1]);
-    explainGrid.Padding = [2 2 2 2];
-    explainGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    % 11. Lesion Findings Panel
+    lesPanel = uipanel(controlGrid, 'Title', 'Diabetic Lesion Findings', ...
+                       'BackgroundColor', [0.16, 0.16, 0.18], 'ForegroundColor', [0.95, 0.8, 0.8]);
+    lesPanel.Layout.Row = 11;
+    lesGrid = uigridlayout(lesPanel, [3, 1]);
+    lesGrid.RowHeight = {16, 16, 16};
+    lesGrid.Padding = [4 4 4 4];
+    lesGrid.BackgroundColor = [0.16, 0.16, 0.18];
     
-    txtExplain = uitextarea(explainGrid, 'Editable', 'off', ...
-                            'BackgroundColor', [0.1, 0.1, 0.12], ...
-                            'FontColor', [0.85, 0.85, 0.85], ...
-                            'FontSize', 9, ...
-                            'Value', {'Run analysis to see explainability text.'});
+    lblExudates = uilabel(lesGrid, 'Text', 'Exudate Candidates: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblMAs = uilabel(lesGrid, 'Text', 'Microaneurysms: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    lblHems = uilabel(lesGrid, 'Text', 'Hemorrhages: --', 'TextColor', [0.8, 0.8, 0.8], 'FontSize', 9);
+    
+    % 12. Algorithmic Explanations Text Area
+    expPanel = uipanel(controlGrid, 'Title', 'XAI Reasoning Summary', ...
+                       'BackgroundColor', [0.12, 0.12, 0.14], 'ForegroundColor', [0.9, 0.9, 0.9]);
+    expPanel.Layout.Row = 12;
+    expGrid = uigridlayout(expPanel, [1, 1]);
+    expGrid.Padding = [2 2 2 2];
+    expGrid.BackgroundColor = [0.12, 0.12, 0.14];
+    
+    txtExplain = uitextarea(expGrid, 'Editable', 'off', ...
+                            'BackgroundColor', [0.08, 0.08, 0.10], ...
+                            'FontColor', [0.8, 0.8, 0.8], 'FontSize', 9, ...
+                            'Value', {'Run analysis to generate explainability report.'});
                         
-    % Medical Disclaimer Notice
-    lblDisclaimer = uilabel(controlGrid, 'WordWrap', 'on', ...
-                            'Text', 'Disclaimer: This prototype is intended for research and hackathon demonstration purposes. It is not a medical diagnostic device.', ...
-                            'FontAngle', 'italic', 'FontSize', 8, ...
-                            'TextColor', [0.65, 0.65, 0.65]);
-    lblDisclaimer.Layout.Row = 10;
+    % 13. Export Report Button
+    btnExport = uibutton(controlGrid, 'push', 'Text', '📄 Export Screening Report (PNG)', ...
+                         'BackgroundColor', [0.2, 0.45, 0.35], ...
+                         'FontColor', [1, 1, 1], 'FontWeight', 'bold', ...
+                         'ButtonPushedFcn', @(~,~) export_report_callback());
+    btnExport.Layout.Row = 13;
+    
+    % 14. Probe Tooltip / Inspector Status
+    lblProbe = uilabel(controlGrid, 'Text', 'Inspector: Click image to inspect pixel & pathology.', ...
+                       'FontAngle', 'italic', 'FontSize', 9, 'TextColor', [0.7, 0.7, 0.7]);
+    lblProbe.Layout.Row = 14;
 
-    % --- RIGHT DISPLAY PANEL ---
+    % --- RIGHT VISUALIZATION CANVAS (DUAL VIEWPORT) ---
     displayGrid = uigridlayout(mainGrid, [2, 1]);
-    displayGrid.RowHeight = {40, '1x'};
+    displayGrid.RowHeight = {45, '1x'};
     displayGrid.Layout.Column = 2;
-    displayGrid.BackgroundColor = [0.12, 0.12, 0.14];
+    displayGrid.BackgroundColor = [0.10, 0.10, 0.12];
     
-    % Tabs / Mode Selectors at the Top
-    tabPanel = uipanel(displayGrid, 'BackgroundColor', [0.14, 0.14, 0.16], 'BorderType', 'none');
-    tabPanel.Layout.Row = 1;
-    tabGrid = uigridlayout(tabPanel, [1, 4]);
-    tabGrid.ColumnWidth = {'1x', '1x', '1x', '1x'};
-    tabGrid.Padding = [2 2 2 2];
-    tabGrid.BackgroundColor = [0.14, 0.14, 0.16];
+    % Top Navigation / View Mode Selectors
+    topNavPanel = uipanel(displayGrid, 'BackgroundColor', [0.14, 0.14, 0.16], 'BorderType', 'none');
+    topNavPanel.Layout.Row = 1;
+    topNavGrid = uigridlayout(topNavPanel, [1, 5]);
+    topNavGrid.ColumnWidth = {'1x', '1x', '1x', '1x', '1x'};
+    topNavGrid.Padding = [3 3 3 3];
+    topNavGrid.BackgroundColor = [0.14, 0.14, 0.16];
     
-    btnTabOriginal = uibutton(tabGrid, 'state', 'Text', 'Original Fundus', 'Value', true, ...
-                               'BackgroundColor', [0.2, 0.22, 0.26], 'FontColor', [1 1 1], ...
-                               'ValueChangedFcn', @(src,~) switch_tab_callback(src, 'original'));
-    btnTabOriginal.Layout.Column = 1;
-    
-    btnTabOverlay = uibutton(tabGrid, 'state', 'Text', 'Segmentation Overlay', ...
-                              'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
-                              'ValueChangedFcn', @(src,~) switch_tab_callback(src, 'overlay'));
-    btnTabOverlay.Layout.Column = 2;
-    
-    btnTabTortuosity = uibutton(tabGrid, 'state', 'Text', 'Vessel Tortuosity', ...
-                                 'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
-                                 'ValueChangedFcn', @(src,~) switch_tab_callback(src, 'tortuosity'));
-    btnTabTortuosity.Layout.Column = 3;
-    
-    btnTabLesions = uibutton(tabGrid, 'state', 'Text', 'DR Lesions Map', ...
-                              'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
-                              'ValueChangedFcn', @(src,~) switch_tab_callback(src, 'lesions'));
-    btnTabLesions.Layout.Column = 4;
-    
-    % Main Visual Axes Area
-    axesPanel = uipanel(displayGrid, 'BackgroundColor', [0.1, 0.1, 0.12], 'BorderType', 'none');
-    axesPanel.Layout.Row = 2;
-    axesGrid = uigridlayout(axesPanel, [1, 1]);
-    axesGrid.Padding = [5 5 5 5];
-    axesGrid.BackgroundColor = [0.1, 0.1, 0.12];
-    
-    axDisplay = uiaxes(axesGrid, 'Color', [0.1, 0.1, 0.12]);
-    axDisplay.XAxis.Visible = 'off';
-    axDisplay.YAxis.Visible = 'off';
-    title(axDisplay, 'Image Viewport', 'Color', [0.8 0.8 0.8]);
+    btnModeSingle = uibutton(topNavGrid, 'state', 'Text', 'Single View', 'Value', true, ...
+                             'BackgroundColor', [0.22, 0.25, 0.32], 'FontColor', [1 1 1], ...
+                             'ValueChangedFcn', @(src,~) switch_view_mode(src, 'single'));
+    btnModeDual = uibutton(topNavGrid, 'state', 'Text', 'Dual Side-by-Side', 'Value', false, ...
+                           'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
+                           'ValueChangedFcn', @(src,~) switch_view_mode(src, 'dual'));
+    btnTabOverlay = uibutton(topNavGrid, 'state', 'Text', 'Composite Overlay', 'Value', true, ...
+                             'BackgroundColor', [0.22, 0.25, 0.32], 'FontColor', [1 1 1], ...
+                             'ValueChangedFcn', @(src,~) switch_tab_mode(src, 'overlay'));
+    btnTabTort = uibutton(topNavGrid, 'state', 'Text', 'Vessel Tortuosity', 'Value', false, ...
+                          'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
+                          'ValueChangedFcn', @(src,~) switch_tab_mode(src, 'tortuosity'));
+    btnTabLesions = uibutton(topNavGrid, 'state', 'Text', 'Lesions Only', 'Value', false, ...
+                            'BackgroundColor', [0.16, 0.16, 0.18], 'FontColor', [0.8 0.8 0.8], ...
+                            'ValueChangedFcn', @(src,~) switch_tab_mode(src, 'lesions'));
 
-    % --- DEMO INITIALIZATION ---
-    % Auto-generate synthetic fundus for out-of-the-box demo
-    currentImage = generate_synthetic_fundus_app();
-    imshow(currentImage, 'Parent', axDisplay);
-    title(axDisplay, 'Demo Fundus Loaded (Click Run Retinal Analysis)', 'Color', [0.0 0.8 1.0]);
-
-    % --- CALLBACK FUNCTIONS ---
+    % Viewport Panel containing Axes
+    viewportPanel = uipanel(displayGrid, 'BackgroundColor', [0.08, 0.08, 0.10], 'BorderType', 'none');
+    viewportPanel.Layout.Row = 2;
+    viewportGrid = uigridlayout(viewportPanel, [1, 2]);
+    viewportGrid.ColumnWidth = {'1x', 0}; % Start in single mode (Right axis hidden)
+    viewportGrid.Padding = [4 4 4 4];
+    viewportGrid.BackgroundColor = [0.08, 0.08, 0.10];
     
-    function update_slider_label()
+    % Primary Viewport Axes
+    axLeft = uiaxes(viewportGrid, 'Color', [0.08, 0.08, 0.10]);
+    axLeft.XAxis.Visible = 'off';
+    axLeft.YAxis.Visible = 'off';
+    title(axLeft, 'Primary Viewport', 'Color', [0.8 0.8 0.8], 'FontSize', 11);
+    
+    % Secondary Viewport Axes (Dual Mode)
+    axRight = uiaxes(viewportGrid, 'Color', [0.08, 0.08, 0.10]);
+    axRight.XAxis.Visible = 'off';
+    axRight.YAxis.Visible = 'off';
+    title(axRight, 'Comparison Viewport (Original)', 'Color', [0.8 0.8 0.8], 'FontSize', 11);
+    
+    % Enable Click-to-Probe callback on axes
+    axLeft.ButtonDownFcn = @(src, event) probe_pixel_callback(event);
+
+    % --- INITIALIZE WITH DEFAULT PRESET ---
+    load_preset_image('Normal Healthy Retina');
+    run_analysis_callback();
+
+    % =========================================================================
+    % CALLBACK FUNCTIONS
+    % =========================================================================
+    
+    function update_sensitivity_label()
         lblSens.Text = sprintf('Vessel Sensitivity: %.2f', sldSens.Value);
     end
 
-    function load_image_callback()
-        % File selection dialog
-        [file, path] = uigetfile({'*.jpg;*.jpeg;*.png;*.tif;*.tiff', 'Image Files (*.jpg, *.png, *.tif)'}, ...
-                                'Select retinal fundus image');
-        if isequal(file, 0)
-            return; % User cancelled
+    function preset_change_callback(selectedPreset)
+        currentPreset = selectedPreset;
+        load_preset_image(selectedPreset);
+        run_analysis_callback();
+    end
+
+    function load_preset_image(presetName)
+        switch presetName
+            case 'Normal Healthy Retina'
+                currentImage = generate_preset_fundus('normal');
+            case 'Mild NPDR (Early MAs)'
+                currentImage = generate_preset_fundus('mild_dr');
+            case 'Severe DR (Exudates + Hems)'
+                currentImage = generate_preset_fundus('severe_dr');
+            case 'High Vessel Tortuosity'
+                currentImage = generate_preset_fundus('tortuous');
         end
+    end
+
+    function load_image_callback()
+        [file, path] = uigetfile({'*.jpg;*.jpeg;*.png;*.tif;*.tiff', 'Fundus Image (*.jpg, *.png, *.tif)'}, ...
+                                'Select retinal fundus image');
+        if isequal(file, 0), return; end
         
         imgPath = fullfile(path, file);
         try
             currentImage = imread(imgPath);
-            % Reset UI states
-            resultsData = [];
-            overlayNormal = [];
-            overlayTort = [];
-            
-            % Reset visual tab states
-            btnTabOriginal.Value = true;
-            btnTabOverlay.Value = false;
-            btnTabTortuosity.Value = false;
-            btnTabLesions.Value = false;
-            
-            % Update buttons display colors
-            reset_tab_colors();
-            btnTabOriginal.BackgroundColor = [0.2, 0.22, 0.26];
-            btnTabOriginal.FontColor = [1 1 1];
-            
-            % Draw loaded image
-            imshow(currentImage, 'Parent', axDisplay);
-            title(axDisplay, sprintf('Loaded: %s', file), 'Color', [1 1 1]);
-            
-            % Clear metrics
-            clear_metrics_text();
-            txtExplain.Value = {'Image loaded. Adjust settings and click Run Retinal Analysis.'};
+            ddPreset.Value = 'Normal Healthy Retina';
+            run_analysis_callback();
         catch ME
-            uialert(fig, sprintf('Failed to load image: %s', ME.message), 'Error loading image');
+            uialert(fig, sprintf('Failed to load image: %s', ME.message), 'Image Load Error');
         end
     end
 
     function run_analysis_callback()
-        if isempty(currentImage)
-            uialert(fig, 'Please load a retinal fundus image first.', 'No image loaded');
-            return;
-        end
+        if isempty(currentImage), return; end
         
-        % Set up options from controls
+        btnRun.Enable = 'off';
+        btnRun.Text = '🔄 Processing...';
+        drawnow;
+        
         options = struct();
         options.vesselSensitivity = sldSens.Value;
         options.enableLesions = true;
         
-        % Disable button during processing
-        btnRun.Enable = 'off';
-        btnRun.Text = '🔄 Analyzing Retina...';
-        drawnow;
-        
         try
-            % Execute pipeline
             [resultsData, overlayNormal] = segment_retina(currentImage, options);
-            
-            % Generate secondary overlays
             overlayTort = create_segmentation_overlay(currentImage, resultsData, 'tortuosity');
             
-            % Update displays based on active tab
-            if btnTabOriginal.Value
-                imshow(currentImage, 'Parent', axDisplay);
-                title(axDisplay, 'Original Fundus Image', 'Color', [1 1 1]);
-            elseif btnTabOverlay.Value
-                imshow(overlayNormal, 'Parent', axDisplay);
-                title(axDisplay, 'Retina Segmentation Composite Overlay', 'Color', [0.0 0.8 1.0]);
-            elseif btnTabTortuosity.Value
-                imshow(overlayTort, 'Parent', axDisplay);
-                title(axDisplay, 'Retinal Vessel Segment Tortuosity (Green: Low, Orange: Mod, Red: High)', 'Color', [0.8 0.2 0]);
-            elseif btnTabLesions.Value
-                imshow(resultsData.lesionCombinedMask, 'Parent', axDisplay);
-                title(axDisplay, 'Combined Diabetic Retinopathy Lesions Mask', 'Color', [1 0.4 0.4]);
-            end
-            
-            % Update Metrics Displays
-            update_metrics_displays();
+            % Update displays & score breakdown chart
+            render_custom_overlay();
+            update_metrics();
+            update_breakdown_chart();
             
         catch ME
-            uialert(fig, sprintf('Analysis failed: %s', ME.message), 'Analysis Error');
+            uialert(fig, sprintf('Analysis error: %s', ME.message), 'Processing Error');
         end
         
         btnRun.Enable = 'on';
-        btnRun.Text = '⚡ Run Retinal Analysis';
+        btnRun.Text = '⚡ Run Analysis';
     end
 
-    function switch_tab_callback(clickedBtn, tabName)
-        % Enforce exclusive mutual exclusion for state buttons
-        btnTabOriginal.Value = false;
-        btnTabOverlay.Value = false;
-        btnTabTortuosity.Value = false;
-        btnTabLesions.Value = false;
+    function render_custom_overlay()
+        if isempty(resultsData), return; end
         
-        clickedBtn.Value = true;
+        alphaVal = sldAlpha.Value;
+        lblAlpha.Text = sprintf('Overlay Opacity (Alpha): %d%%', round(alphaVal * 100));
         
-        % Reset colors
-        reset_tab_colors();
-        clickedBtn.BackgroundColor = [0.2, 0.22, 0.26];
-        clickedBtn.FontColor = [1 1 1];
-        
-        if isempty(currentImage)
-            return;
+        % Build dynamic custom overlay according to checkboxes
+        customMaskStruct = resultsData;
+        if ~cbVessels.Value, customMaskStruct.vesselMask = false(size(resultsData.vesselMask)); end
+        if ~cbDisc.Value, customMaskStruct.opticDiscMask = false(size(resultsData.opticDiscMask)); end
+        if ~cbCup.Value, customMaskStruct.opticCupMask = false(size(resultsData.opticCupMask)); end
+        if ~cbFovea.Value, customMaskStruct.foveaMask = false(size(resultsData.foveaMask)); end
+        if ~cbExudates.Value, customMaskStruct.exudateMask = false(size(resultsData.exudateMask)); end
+        if ~cbDarkLesions.Value
+            customMaskStruct.microaneurysmMask = false(size(resultsData.microaneurysmMask));
+            customMaskStruct.hemorrhageMask = false(size(resultsData.hemorrhageMask));
         end
         
-        % Draw appropriate map
-        switch tabName
-            case 'original'
-                imshow(currentImage, 'Parent', axDisplay);
-                title(axDisplay, 'Original Retinal Fundus View', 'Color', [1 1 1]);
-            case 'overlay'
-                if ~isempty(overlayNormal)
-                    imshow(overlayNormal, 'Parent', axDisplay);
-                    title(axDisplay, 'Composite Segmentation Overlay', 'Color', [0.0 0.8 1.0]);
-                else
-                    imshow(currentImage, 'Parent', axDisplay);
-                    title(axDisplay, 'Click Run Analysis to generate overlay', 'Color', [1 0.8 0]);
-                end
-            case 'tortuosity'
-                if ~isempty(overlayTort)
-                    imshow(overlayTort, 'Parent', axDisplay);
-                    title(axDisplay, 'Vessel Segment Tortuosity Map (Green <=1.10, Orange <=1.25, Red >1.25)', 'Color', [0.8 0.2 0]);
-                else
-                    imshow(currentImage, 'Parent', axDisplay);
-                    title(axDisplay, 'Click Run Analysis to generate tortuosity', 'Color', [1 0.8 0]);
-                end
-            case 'lesions'
-                if ~isempty(resultsData)
-                    imshow(resultsData.lesionCombinedMask, 'Parent', axDisplay);
-                    title(axDisplay, 'DR Lesion Candidates Combined Mask (White = Lesion)', 'Color', [1 0.4 0.4]);
-                else
-                    imshow(currentImage, 'Parent', axDisplay);
-                    title(axDisplay, 'Click Run Analysis to generate lesion mask', 'Color', [1 0.8 0]);
-                end
+        % Generate dynamic blended overlay
+        if btnTabTort.Value
+            dynOverlay = create_segmentation_overlay(currentImage, customMaskStruct, 'tortuosity');
+        elseif btnTabLesions.Value
+            % Black background with colored lesions
+            H = size(currentImage, 1); W = size(currentImage, 2);
+            dynOverlay = zeros(H, W, 3, 'uint8');
+            if cbExudates.Value
+                dynOverlay = apply_mask_color(dynOverlay, resultsData.exudateMask, [255 255 0]);
+            end
+            if cbDarkLesions.Value
+                dynOverlay = apply_mask_color(dynOverlay, resultsData.microaneurysmMask, [255 165 0]);
+                dynOverlay = apply_mask_color(dynOverlay, resultsData.hemorrhageMask, [255 0 0]);
+            end
+        else
+            dynOverlay = create_segmentation_overlay(currentImage, customMaskStruct, 'normal');
+        end
+        
+        % Draw on Left Axis
+        imshow(dynOverlay, 'Parent', axLeft);
+        title(axLeft, 'Interactive RetinaScan Viewport', 'Color', [0.0 0.9 1.0], 'FontSize', 11);
+        
+        % Draw on Right Axis (if dual mode)
+        if btnModeDual.Value
+            imshow(currentImage, 'Parent', axRight);
+            title(axRight, 'Reference Fundus Viewport', 'Color', [0.8 0.8 0.8], 'FontSize', 11);
         end
     end
 
-    function reset_tab_colors()
-        btnTabOriginal.BackgroundColor = [0.16, 0.16, 0.18];
-        btnTabOriginal.FontColor = [0.8, 0.8, 0.8];
-        btnTabOverlay.BackgroundColor = [0.16, 0.16, 0.18];
-        btnTabOverlay.FontColor = [0.8, 0.8, 0.8];
-        btnTabTortuosity.BackgroundColor = [0.16, 0.16, 0.18];
-        btnTabTortuosity.FontColor = [0.8, 0.8, 0.8];
-        btnTabLesions.BackgroundColor = [0.16, 0.16, 0.18];
-        btnTabLesions.FontColor = [0.8, 0.8, 0.8];
-    end
-
-    function clear_metrics_text()
-        lblScore.Text = 'Score: --';
-        lblScore.TextColor = [0.8, 0.8, 0.8];
-        lblInterpretation.Text = 'Interpretation: --';
-        lblVesDensity.Text = 'Vessel Density: --';
-        lblVesLength.Text = 'Skeleton Length: --';
-        lblVesBranches.Text = 'Branch Points: --';
-        lblVesWidth.Text = 'Vessel Width: --';
-        lblDiscArea.Text = 'Optic Disc Area: --';
-        lblCupArea.Text = 'Optic Cup Area: --';
-        lblCDR.Text = 'Cup-to-Disc Ratio (CDR): --';
-        lblExudate.Text = 'Exudates: --';
-        lblMA.Text = 'Microaneurysms: --';
-        lblHems.Text = 'Hemorrhages: --';
-    end
-
-    function update_metrics_displays()
-        if isempty(resultsData)
-            return;
+    function imgOut = apply_mask_color(imgIn, mask, rgbColor)
+        imgOut = imgIn;
+        for ch = 1:3
+            layer = imgOut(:, :, ch);
+            layer(mask) = rgbColor(ch);
+            imgOut(:, :, ch) = layer;
         end
+    end
+
+    function switch_view_mode(clickedBtn, modeName)
+        btnModeSingle.Value = strcmp(modeName, 'single');
+        btnModeDual.Value = strcmp(modeName, 'dual');
+        
+        reset_btn_color(btnModeSingle);
+        reset_btn_color(btnModeDual);
+        
+        if strcmp(modeName, 'dual')
+            viewportGrid.ColumnWidth = {'1x', '1x'};
+        else
+            viewportGrid.ColumnWidth = {'1x', 0};
+        end
+        render_custom_overlay();
+    end
+
+    function switch_tab_mode(clickedBtn, tabName)
+        btnTabOverlay.Value = strcmp(tabName, 'overlay');
+        btnTabTort.Value = strcmp(tabName, 'tortuosity');
+        btnTabLesions.Value = strcmp(tabName, 'lesions');
+        
+        reset_btn_color(btnTabOverlay);
+        reset_btn_color(btnTabTort);
+        reset_btn_color(btnTabLesions);
+        
+        render_custom_overlay();
+    end
+
+    function reset_btn_color(btn)
+        if btn.Value
+            btn.BackgroundColor = [0.22, 0.25, 0.32];
+            btn.FontColor = [1 1 1];
+        else
+            btn.BackgroundColor = [0.16, 0.16, 0.18];
+            btn.FontColor = [0.8 0.8 0.8];
+        end
+    end
+
+    function update_metrics()
         f = resultsData.features;
         
-        % Abnormality Score
-        lblScore.Text = sprintf('Score: %.1f / 100', f.vesselAbnormalityScore);
+        % Abnormality Score & Interpretation
+        lblScore.Text = sprintf('Abnormality Score: %.1f / 100', f.vesselAbnormalityScore);
         if f.vesselAbnormalityScore <= 30
-            lblScore.TextColor = [0.0, 0.8, 0.4]; % Green
+            lblScore.TextColor = [0.2, 0.9, 0.4]; % Green
         elseif f.vesselAbnormalityScore <= 60
-            lblScore.TextColor = [1.0, 0.6, 0.0]; % Orange
+            lblScore.TextColor = [1.0, 0.65, 0.1]; % Orange
         else
-            lblScore.TextColor = [1.0, 0.2, 0.2]; % Red
+            lblScore.TextColor = [1.0, 0.25, 0.25]; % Red
         end
-        lblInterpretation.Text = sprintf('Interpretation: %s', resultsData.vesselAnalysis.interpretation);
+        lblInterpretation.Text = sprintf('Classification: %s', resultsData.vesselAnalysis.interpretation);
         
-        % Vessels
-        lblVesDensity.Text = sprintf('Vessel Density: %.2f%% of FOV', f.vesselDensity * 100);
-        lblVesLength.Text = sprintf('Skeleton Length: %d pixels', int32(f.skeletonLength));
-        lblVesBranches.Text = sprintf('Branch Points: %d (Density: %.1f)', int32(f.branchPointCount), f.branchingDensity);
-        lblVesWidth.Text = sprintf('Vessel Width: %.2f px (CV: %.2f)', f.meanVesselWidth, f.vesselWidthCV);
+        % Features
+        lblVesDensity.Text = sprintf('Vessel Density: %.2f%% | Skeleton: %d px', f.vesselDensity * 100, int32(f.skeletonLength));
+        lblVesBranches.Text = sprintf('Branch Points: %d (Density: %.1f/Mpx)', int32(f.branchPointCount), f.branchingDensity);
+        lblVesWidth.Text = sprintf('Vessel Width: %.2f px (Irreg CV: %.2f)', f.meanVesselWidth, f.vesselWidthCV);
         
-        % Disc/Cup
         lblDiscArea.Text = sprintf('Optic Disc Area: %d pixels', int32(f.opticDiscArea));
         lblCupArea.Text = sprintf('Optic Cup Area: %d pixels', int32(f.opticCupArea));
-        lblCDR.Text = sprintf('Cup-to-Disc Ratio: %.3f (surrogate)', f.cupToDiscRatio);
+        lblCDR.Text = sprintf('Cup-to-Disc Ratio (CDR): %.3f', f.cupToDiscRatio);
         
-        % Lesions
-        lblExudate.Text = sprintf('Exudates Count: %d (Area: %d px)', int32(f.exudateCount), int32(f.exudateArea));
-        lblMA.Text = sprintf('Microaneurysms Count: %d', int32(f.microaneurysmCount));
-        lblHems.Text = sprintf('Hemorrhages Count: %d', int32(f.hemorrhageCount));
+        lblExudates.Text = sprintf('Exudates: %d detected (Area: %d px)', int32(f.exudateCount), int32(f.exudateArea));
+        lblMAs.Text = sprintf('Microaneurysms: %d candidates', int32(f.microaneurysmCount));
+        lblHems.Text = sprintf('Hemorrhages: %d candidate pools', int32(f.hemorrhageCount));
         
-        % Populate Explainability Box
+        % Explanations
         exp = resultsData.explanations;
-        explainVals = {
+        txtExplain.Value = {
             'EXPLAINABLE REASONING REPORT:';
-            '';
-            ['• Vessel Segmentation: ' exp.vessel];
-            '';
-            ['• Optic Disc Detection: ' exp.opticDisc];
-            '';
-            ['• Optic Cup Detection: ' exp.opticCup];
-            '';
-            ['• Fovea Estimation: ' exp.fovea];
-            '';
-            ['• Exudate Candidates: ' exp.exudates];
-            '';
+            ['• Vessel Network: ' exp.vessel];
+            ['• Optic Disc/Cup: ' exp.opticDisc ' ' exp.opticCup];
+            ['• Fovea Location: ' exp.fovea];
+            ['• Exudate Findings: ' exp.exudates];
             ['• Microaneurysms: ' exp.microaneurysms];
-            '';
-            ['• Hemorrhage Candidates: ' exp.hemorrhages];
-            '';
-            ['• Vessel Abnormality Score: ' exp.vesselScore]
+            ['• Hemorrhage Findings: ' exp.hemorrhages];
+            ['• Abnormality Score: ' exp.vesselScore]
         };
-        txtExplain.Value = explainVals;
+    end
+
+    function update_breakdown_chart()
+        f = resultsData.features;
+        cla(axChart);
+        
+        categories = {'Tortuosity (50%)', 'Branching (25%)', 'Width Var (25%)', 'Combined Score'};
+        scores = [f.tortuosityScore, f.branchingScore, f.widthIrregularityScore, f.vesselAbnormalityScore];
+        
+        b = barh(axChart, 1:4, scores, 'FaceColor', 'flat');
+        b.CData(1, :) = [0.2, 0.8, 0.4];
+        b.CData(2, :) = [0.2, 0.6, 0.9];
+        b.CData(3, :) = [0.9, 0.7, 0.2];
+        b.CData(4, :) = [1.0, 0.4, 0.3];
+        
+        axChart.YTick = 1:4;
+        axChart.YTickLabel = categories;
+        axChart.XLim = [0, 100];
+        axChart.FontSize = 8;
+    end
+
+    function probe_pixel_callback(event)
+        if isempty(resultsData), return; end
+        
+        coords = round(event.IntersectionPoint(1:2));
+        x = coords(1); y = coords(2);
+        [H, W, ~] = size(currentImage);
+        
+        if x < 1 || x > W || y < 1 || y > H
+            lblProbe.Text = 'Inspector: Clicked outside valid image bounds.';
+            return;
+        end
+        
+        % Check findings at (y, x)
+        finding = 'Background / Normal Retina';
+        if resultsData.exudateMask(y, x)
+            finding = '⚠️ Hard Exudate Candidate';
+        elseif resultsData.microaneurysmMask(y, x)
+            finding = '⚠️ Microaneurysm Candidate (MA)';
+        elseif resultsData.hemorrhageMask(y, x)
+            finding = '⚠️ Retinal Hemorrhage Pool';
+        elseif resultsData.opticCupMask(y, x)
+            finding = '👁️ Optic Cup (Central Excavation)';
+        elseif resultsData.opticDiscMask(y, x)
+            finding = '👁️ Optic Disc Region';
+        elseif resultsData.vesselMask(y, x)
+            finding = '🩸 Retinal Blood Vessel';
+        elseif resultsData.foveaMask(y, x)
+            finding = '🎯 Macula / Fovea Center';
+        end
+        
+        rgb = currentImage(y, x, :);
+        lblProbe.Text = sprintf('Inspector [%d, %d]: %s (RGB: %d, %d, %d)', x, y, finding, rgb(1), rgb(2), rgb(3));
+    end
+
+    function export_report_callback()
+        if isempty(resultsData)
+            uialert(fig, 'Run analysis before exporting report.', 'No Data');
+            return;
+        end
+        
+        [file, path] = uiputfile('RetinaScan_Screening_Report.png', 'Save Clinical Screening Report');
+        if isequal(file, 0), return; end
+        
+        savePath = fullfile(path, file);
+        % Create export summary canvas
+        repFig = figure('Visible', 'off', 'Position', [100 100 1000 650], 'Color', [1 1 1]);
+        
+        subplot(1, 2, 1);
+        imshow(create_segmentation_overlay(currentImage, resultsData, 'normal'));
+        title('RetinaScan Segmentation Overlay', 'FontSize', 12, 'FontWeight', 'bold');
+        
+        subplot(1, 2, 2);
+        axis off;
+        f = resultsData.features;
+        text(0.05, 0.95, 'RetinaScan AI Screening Report', 'FontSize', 16, 'FontWeight', 'bold', 'Color', [0 0.4 0.7]);
+        text(0.05, 0.88, sprintf('Timestamp: %s', datestr(now)), 'FontSize', 9, 'FontAngle', 'italic');
+        text(0.05, 0.80, sprintf('Vessel Abnormality Score: %.1f / 100', f.vesselAbnormalityScore), 'FontSize', 13, 'FontWeight', 'bold', 'Color', [0.8 0.2 0]);
+        text(0.05, 0.72, sprintf('Classification: %s', resultsData.vesselAnalysis.interpretation), 'FontSize', 11, 'FontWeight', 'bold');
+        
+        text(0.05, 0.60, sprintf('Vascular Density: %.2f%%', f.vesselDensity * 100), 'FontSize', 10);
+        text(0.05, 0.54, sprintf('Vessel Branch Points: %d', int32(f.branchPointCount)), 'FontSize', 10);
+        text(0.05, 0.48, sprintf('Vessel Mean Tortuosity: %.3f', f.meanTortuosity), 'FontSize', 10);
+        text(0.05, 0.42, sprintf('Cup-to-Disc Ratio (CDR): %.3f', f.cupToDiscRatio), 'FontSize', 10);
+        text(0.05, 0.36, sprintf('Hard Exudates Count: %d', int32(f.exudateCount)), 'FontSize', 10);
+        text(0.05, 0.30, sprintf('Microaneurysms Count: %d', int32(f.microaneurysmCount)), 'FontSize', 10);
+        text(0.05, 0.24, sprintf('Hemorrhages Count: %d', int32(f.hemorrhageCount)), 'FontSize', 10);
+        
+        text(0.05, 0.08, 'Disclaimer: Research prototype for SIH260038. Not a diagnostic device.', 'FontSize', 8, 'FontAngle', 'italic', 'Color', [0.5 0.5 0.5]);
+        
+        saveas(repFig, savePath);
+        close(repFig);
+        uialert(fig, sprintf('Screening report saved successfully to:\n%s', savePath), 'Report Exported');
     end
 end
 
-function img = generate_synthetic_fundus_app()
-% Generates a realistic synthetic fundus image for demonstration inside App.
+% =========================================================================
+% PRESET SYNTHETIC FUNDUS GENERATOR
+% =========================================================================
+function img = generate_preset_fundus(presetType)
     H = 512; W = 512;
     img = zeros(H, W, 3, 'uint8');
     
@@ -470,7 +602,7 @@ function img = generate_synthetic_fundus_app()
         img(:, :, c) = layer;
     end
     
-    % Vignette shading
+    % Shading
     distFromCenter = sqrt((X - centerX).^2 + (Y - centerY).^2);
     shadingFactor = 1.0 - (distFromCenter / fovRadius) * 0.4;
     shadingFactor(~fovMask) = 0;
@@ -483,19 +615,15 @@ function img = generate_synthetic_fundus_app()
     
     for c = 1:3
         layer = img(:, :, c);
-        if c == 1
-            layer(odMask) = 245; layer(ocMask) = 255;
-        elseif c == 2
-            layer(odMask) = 205; layer(ocMask) = 240;
-        elseif c == 3
-            layer(odMask) = 110; layer(ocMask) = 180;
-        end
+        if c == 1, layer(odMask) = 245; layer(ocMask) = 255; end
+        if c == 2, layer(odMask) = 205; layer(ocMask) = 240; end
+        if c == 3, layer(odMask) = 110; layer(ocMask) = 180; end
         img(:, :, c) = layer;
     end
     
     % Fovea
-    foveaX = odX + 160; foveaY = odY + 10; foveaRadius = 18;
-    foveaMask = ((X - foveaX).^2 + (Y - foveaY).^2) <= (foveaRadius^2);
+    foveaX = odX + 160; foveaY = odY + 10;
+    foveaMask = ((X - foveaX).^2 + (Y - foveaY).^2) <= (18^2);
     for c = 1:3
         layer = img(:, :, c);
         if c == 1, layer(foveaMask) = 130; end
@@ -512,15 +640,20 @@ function img = generate_synthetic_fundus_app()
     unX = odX - 50 * t; unY = odY - 60 * sin(t * 0.9) - 10 * t;
     lnX = odX - 50 * t; lnY = odY + 60 * sin(t * 0.9) + 10 * t;
     
-    % Tortuous vessel
-    tortX = odX + 120 + 20 * sin(t * 8.0); tortY = odY + 80 + 30 * t;
+    if strcmp(presetType, 'tortuous')
+        tortX = odX + 100 + 35 * sin(t * 12.0);
+        tortY = odY + 40 + 40 * t;
+        vesselMask = draw_curve_preset(vesselMask, tortX, tortY, 4.0, H, W);
+    else
+        tortX = odX + 120 + 15 * sin(t * 6.0);
+        tortY = odY + 80 + 30 * t;
+        vesselMask = draw_curve_preset(vesselMask, tortX, tortY, 2.0, H, W);
+    end
     
-    % Draw on mask
-    vesselMask = draw_curve_app(vesselMask, utX, utY, 4.0, H, W);
-    vesselMask = draw_curve_app(vesselMask, ltX, ltY, 3.5, H, W);
-    vesselMask = draw_curve_app(vesselMask, unX, unY, 3.0, H, W);
-    vesselMask = draw_curve_app(vesselMask, lnX, lnY, 2.5, H, W);
-    vesselMask = draw_curve_app(vesselMask, tortX, tortY, 2.0, H, W);
+    vesselMask = draw_curve_preset(vesselMask, utX, utY, 4.0, H, W);
+    vesselMask = draw_curve_preset(vesselMask, ltX, ltY, 3.5, H, W);
+    vesselMask = draw_curve_preset(vesselMask, unX, unY, 3.0, H, W);
+    vesselMask = draw_curve_preset(vesselMask, lnX, lnY, 2.5, H, W);
     vesselMask = vesselMask & fovMask;
     
     for c = 1:3
@@ -531,8 +664,21 @@ function img = generate_synthetic_fundus_app()
         img(:, :, c) = uint8(layer);
     end
     
-    % Exudates
-    exudates = [350, 160; 370, 150; 360, 180; 390, 170; 240, 130];
+    % Lesions based on preset
+    exudates = []; mas = []; hems = [];
+    switch presetType
+        case 'mild_dr'
+            mas = [280, 270; 300, 290; 320, 280; 340, 290; 310, 310];
+            exudates = [370, 150; 360, 180];
+        case 'severe_dr'
+            exudates = [350, 160; 370, 150; 360, 180; 390, 170; 240, 130; 380, 210; 400, 220; 340, 190];
+            mas = [280, 270; 300, 290; 320, 280; 340, 290; 310, 310; 330, 260; 350, 300];
+            hems = [260, 340; 270, 350; 380, 330; 290, 360; 310, 380];
+        case 'tortuous'
+            mas = [310, 290];
+    end
+    
+    % Draw Exudates
     for idx = 1:size(exudates, 1)
         cx = exudates(idx, 1); cy = exudates(idx, 2);
         spotMask = ((X - cx).^2 + (Y - cy).^2) <= (randi([2, 5])^2);
@@ -545,8 +691,7 @@ function img = generate_synthetic_fundus_app()
         end
     end
     
-    % Microaneurysms
-    mas = [280, 270; 300, 290; 320, 280; 340, 290; 310, 310];
+    % Draw MAs
     for idx = 1:size(mas, 1)
         cx = mas(idx, 1); cy = mas(idx, 2);
         spotMask = ((X - cx).^2 + (Y - cy).^2) <= (2^2);
@@ -559,8 +704,7 @@ function img = generate_synthetic_fundus_app()
         end
     end
     
-    % Hemorrhages
-    hems = [260, 340; 270, 350; 380, 330];
+    % Draw Hemorrhages
     for idx = 1:size(hems, 1)
         cx = hems(idx, 1); cy = hems(idx, 2);
         spotMask = ((X - cx).^2 + (Y - cy).^2) <= (randi([6, 12])^2);
@@ -574,7 +718,7 @@ function img = generate_synthetic_fundus_app()
         end
     end
     
-    % Add background noise & gaussian filter
+    % Add mild noise & blur
     noise = randn(H, W) * 2;
     for c = 1:3
         layer = double(img(:, :, c)) + noise;
@@ -588,7 +732,7 @@ function img = generate_synthetic_fundus_app()
     end
 end
 
-function mask = draw_curve_app(mask, px, py, thickness, H, W)
+function mask = draw_curve_preset(mask, px, py, thickness, H, W)
     numPts = numel(px);
     [X, Y] = meshgrid(1:W, 1:H);
     for i = 1:numPts
