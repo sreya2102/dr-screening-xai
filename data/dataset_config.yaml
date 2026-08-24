@@ -1,0 +1,12 @@
+dataset:
+  name: "IDRiD"
+  description: "Indian Diabetic Retinopathy Image Dataset"
+  url: "https://idrid.grand-challenge.org/"
+  sih_problem_statement: "SIH260038"
+  sih_dataset_status: "No official SIH dataset was bundled; IDRiD is used as the primary public research dataset."
+  license: "CC BY 4.0"
+  modalities:
+    - "Fundus Color Images (RGB)"
+    - "Vessel Segmentation Ground Truth"
+    - "Optic Disc Ground Truth"
+    - "Lesion Segmentation Ground Truth (Exudates, MAs, Hemorrhages)"
