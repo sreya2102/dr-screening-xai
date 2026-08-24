@@ -1,0 +1,26 @@
+{
+    "patient_id": "PAT-2026-9042",
+    "patient_name": "John Smith",
+    "eye_side": "OD",
+    "dr_grade": "Moderate NPDR",
+    "confidence": 0.8500000238418579,
+    "iqa_status": "Good",
+    "lesion_importance": {
+        "microaneurysms_count": 144,
+        "microaneurysms_impact_pct": 4.7,
+        "hemorrhages_count": 591,
+        "hemorrhages_impact_pct": 58.4,
+        "exudates_count": 447,
+        "exudates_impact_pct": 36.8,
+        "total_lesions": 1182
+    },
+    "clinical_text": {
+        "diagnostic_summary": "Grade 2: Moderate NPDR (Confidence: 85.0%).",
+        "xai_explanation": "Model identified key DR features: 144 microaneurysms, 591 hemorrhages, and 447 hard exudates. Saliency maps show concentrated attention over paramacular lesion clusters.",
+        "recommendations": "Referral to an Ophthalmologist / Retina Specialist within 4 to 8 weeks. Monitor closely for macular edema."
+    },
+    "report_files": {
+        "html_path": "C:\\Users\\ADMIN\\dr-screening-xai\\module5_explainability\\demoviewer\\output_demo_reports\\Screening_Report_PAT-2026-9042.html",
+        "json_path": "C:\\Users\\ADMIN\\dr-screening-xai\\module5_explainability\\demoviewer\\output_demo_reports\\Report_Data_PAT-2026-9042.json"
+    }
+}

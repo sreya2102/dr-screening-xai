@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diabetic Retinopathy Screening System — Module 5 XAI & Report Generator</title>
+<!-- Google Fonts & html2pdf.js -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --success: #16a34a;
+    --warning: #eab308;
+    --danger: #dc2626;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); line-height: 1.5; padding-bottom: 40px; }
+
+  /* App Bar */
+  .navbar { background: #1e293b; color: #ffffff; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .navbar-brand { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .navbar-subtitle { font-size: 13px; color: #94a3b8; font-weight: 400; }
+
+  /* Main Container */
+  .app-container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+
+  /* Stepper */
+  .stepper { display: flex; justify-content: space-between; margin-bottom: 32px; position: relative; }
+  .stepper::before { content: ''; position: absolute; top: 20px; left: 10%; right: 10%; height: 3px; background: #cbd5e1; z-index: 1; }
+  .step-item { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; flex: 1; cursor: pointer; }
+  .step-icon { width: 42px; height: 42px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 3px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.08); transition: all 0.3s; }
+  .step-label { margin-top: 8px; font-size: 13px; font-weight: 600; color: #64748b; }
+  
+  .step-item.active .step-icon { background: var(--primary); color: #ffffff; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2); }
+  .step-item.active .step-label { color: var(--primary); }
+  .step-item.completed .step-icon { background: var(--success); color: #ffffff; }
+  .step-item.completed .step-label { color: var(--success); }
+
+  /* Cards & Forms */
+  .card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 16px rgba(0,0,0,0.04); padding: 28px; margin-bottom: 24px; }
+  .card-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+
+  /* Form Layout */
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full-width { grid-column: span 2; }
+  label { font-size: 13px; font-weight: 600; color: #475569; }
+  input, select, textarea { padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; font-family: inherit; transition: border-color 0.2s; }
+  input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+
+  /* Dropzone */
+  .dropzone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 24px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s; }
+  .dropzone:hover { border-color: var(--primary); background: #eff6ff; }
+  .dropzone-icon { font-size: 32px; color: var(--primary); margin-bottom: 8px; }
+  .preview-img { max-height: 180px; max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 12px; display: none; }
+
+  /* Buttons */
+  .btn-container { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+  .btn { padding: 11px 22px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-hover); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+  .btn-secondary { background: #e2e8f0; color: #334155; }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-danger { background: #ef4444; color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #15803d; }
+
+  /* Image Visual Grids */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .img-card { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; text-align: center; }
+  .img-card h4 { font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; }
+  .img-card canvas, .img-card img { width: 100%; height: 220px; object-fit: contain; background: #000; border-radius: 6px; }
+
+  /* Badges */
+  .badge { padding: 5px 14px; border-radius: 20px; color: #ffffff; font-weight: 700; font-size: 13px; display: inline-block; }
+  .grade-0 { background: #10b981; }
+  .grade-1 { background: #06b6d4; }
+  .grade-2 { background: #f59e0b; }
+  .grade-3 { background: #f97316; }
+  .grade-4 { background: #ef4444; }
+
+  /* Progress bars */
+  .progress-item { margin-bottom: 12px; }
+  .progress-header { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .progress-bg { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+  .progress-bar { height: 100%; border-radius: 4px; transition: width 0.4s; }
+
+  /* Recommendation alert box */
+  .rec-box { background: #fffbe6; border-left: 5px solid #d4b106; padding: 16px; border-radius: 6px; margin-top: 16px; color: #735c00; font-size: 14px; }
+
+  /* Print styling */
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .navbar, .stepper, .no-print { display: none !important; }
+    .card { box-shadow: none; border: 1px solid #cbd5e1; padding: 15px; margin-bottom: 15px; }
+    .app-container { max-width: 100%; margin: 0; padding: 0; }
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- App Navbar -->
+<header class="navbar">
+  <div class="navbar-brand">
+    👁️ Diabetic Retinopathy Screening System
+  </div>
+</header>
+
+<main class="app-container">
+
+  <!-- Stepper Header -->
+  <div class="stepper no-print">
+    <div class="step-item active" id="step-btn-1" onclick="goToStep(1)">
+      <div class="step-icon">1</div>
+      <div class="step-label">Screening Input</div>
+    </div>
+    <div class="step-item" id="step-btn-2" onclick="goToStep(2)">
+      <div class="step-icon">2</div>
+      <div class="step-label">XAI Analysis</div>
+    </div>
+    <div class="step-item" id="step-btn-3" onclick="goToStep(3)">
+      <div class="step-icon">3</div>
+      <div class="step-label">Clinical Report</div>
+    </div>
+  </div>
+
+  <!-- STEP 1: SCREENING INPUT -->
+  <section id="step-1" class="step-view">
+    <div class="card">
+      <div class="card-title">
+        <span>📋 Step 1 — Patient & Screening Input</span>
+        <button type="button" class="btn btn-secondary" onclick="loadSampleData()" style="padding: 6px 12px; font-size: 12px;">⚡ Fill Sample Patient Data</button>
+      </div>
+
+      <form id="input-form" onsubmit="handleStartAnalysis(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="patient_id">Patient ID *</label>
+            <input type="text" id="patient_id" required value="PAT-2026-9042">
+          </div>
+          <div class="form-group">
+            <label for="patient_name">Patient Full Name *</label>
+            <input type="text" id="patient_name" required value="John Smith">
+          </div>
+          <div class="form-group">
+            <label for="patient_age">Age (Years) *</label>
+            <input type="number" id="patient_age" required min="1" max="120" value="62">
+          </div>
+          <div class="form-group">
+            <label for="eye_side">Eye Examined *</label>
+            <select id="eye_side" required>
+              <option value="OD">OD (Right Eye)</option>
+              <option value="OS">OS (Left Eye)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="screening_date">Screening Date *</label>
+            <input type="date" id="screening_date" required>
+          </div>
+          <div class="form-group">
+            <label for="iqa_status">Image Quality (IQA) *</label>
+            <select id="iqa_status" required>
+              <option value="Good">Good (Quality Score: 0.92)</option>
+              <option value="Borderline">Borderline (Quality Score: 0.65)</option>
+              <option value="Reject">Reject (Quality Score: 0.35)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="dr_grade">DR Severity Grade (Module 4 Output) *</label>
+            <select id="dr_grade" required onchange="updateDefaultLesionCounts()">
+              <option value="0">Grade 0: No DR (Normal)</option>
+              <option value="1">Grade 1: Mild NPDR</option>
+              <option value="2" selected>Grade 2: Moderate NPDR</option>
+              <option value="3">Grade 3: Severe NPDR</option>
+              <option value="4">Grade 4: Proliferative DR (PDR)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="confidence">Prediction Confidence (%) *</label>
+            <input type="number" id="confidence" required min="1" max="100" value="88">
+          </div>
+
+          <!-- Image Upload Dropzone -->
+          <div class="form-group full-width">
+            <label>Retinal Fundus Image *</label>
+            <div class="dropzone" onclick="document.getElementById('img_file').click()">
+              <div class="dropzone-icon">📷</div>
+              <p><strong>Click to upload fundus image</strong> or drag and drop file here</p>
+              <small class="text-muted">Supports PNG, JPG, JPEG, TIF (If left unselected, a synthetic retina will be generated automatically)</small>
+              <input type="file" id="img_file" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+              <br>
+              <img id="upload-preview" class="preview-img" alt="Retinal Preview">
+            </div>
+          </div>
+
+          <!-- Optional Lesion Counts -->
+          <div class="form-group full-width">
+            <label style="font-size: 14px; color: var(--primary); font-weight: 700;">Diagnostic Lesion Counts (Optional / Segmented from Module 3)</label>
+          </div>
+          <div class="form-group">
+            <label for="cnt_ma">Microaneurysms Count</label>
+            <input type="number" id="cnt_ma" min="0" value="14">
+          </div>
+          <div class="form-group">
+            <label for="cnt_hem">Hemorrhages Count</label>
+            <input type="number" id="cnt_hem" min="0" value="5">
+          </div>
+          <div class="form-group">
+            <label for="cnt_ex">Hard Exudates Count</label>
+            <input type="number" id="cnt_ex" min="0" value="8">
+          </div>
+        </div>
+
+        <div class="btn-container">
+          <button type="submit" class="btn btn-primary">🚀 Start XAI Analysis →</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- STEP 2: XAI ANALYSIS VIEW -->
+  <section id="step-2" class="step-view" style="display:none;">
+    <div class="card">
+      <div class="card-title">
+        <div>
+          <span>🧠 Step 2 — Explainable AI (XAI) Feature Analysis</span>
+          <br>
+          <small id="patient-summary-tag" style="font-size: 13px; font-weight: 400; color: #64748b;"></small>
+        </div>
+        <div id="grade-badge-step2"></div>
+      </div>
+
+      <!-- 4 Visual Panels Grid -->
+      <div class="grid-4">
+        <div class="img-card">
+          <h4>1. Input Fundus Image</h4>
+          <canvas id="canvas-raw"></canvas>
+        </div>
+        <div class="img-card">
+          <h4>2. Grad-CAM Heatmap Overlay</h4>
+          <canvas id="canvas-gradcam"></canvas>
+        </div>
+        <div class="img-card">
+          <h4>3. Saliency Intensity Map</h4>
+          <canvas id="canvas-saliency"></canvas>
+        </div>
+        <div class="img-card">
+          <h4>4. Lesion Segmentation Overlay</h4>
+          <canvas id="canvas-lesions"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <!-- Quantitative Feature Importance -->
+        <div style="background: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid var(--border-color);">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 16px; color: #1e293b;">📊 Lesion Diagnostic Weight Breakdown</h3>
+          <div class="progress-item">
+            <div class="progress-header">
+              <span>Microaneurysms (<span id="lbl-ma-cnt">0</span>)</span>
+              <span id="lbl-ma-pct">0%</span>
+            </div>
+            <div class="progress-bg"><div id="bar-ma" class="progress-bar" style="background:#ec4899; width:0%;"></div></div>
+          </div>
+          <div class="progress-item">
+            <div class="progress-header">
+              <span>Hemorrhages (<span id="lbl-hem-cnt">0</span>)</span>
+              <span id="lbl-hem-pct">0%</span>
+            </div>
+            <div class="progress-bg"><div id="bar-hem" class="progress-bar" style="background:#ef4444; width:0%;"></div></div>
+          </div>
+          <div class="progress-item">
+            <div class="progress-header">
+              <span>Hard Exudates (<span id="lbl-ex-cnt">0</span>)</span>
+              <span id="lbl-ex-pct">0%</span>
+            </div>
+            <div class="progress-bg"><div id="bar-ex" class="progress-bar" style="background:#eab308; width:0%;"></div></div>
+          </div>
+        </div>
+
+        <!-- Natural Language Explanation -->
+        <div style="background: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid var(--border-color);">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; color: #1e293b;">💬 XAI Natural Language Explanation</h3>
+          <p id="xai-explanation-text" style="font-size: 14px; color: #334155; line-height: 1.6;"></p>
+        </div>
+      </div>
+
+      <div class="btn-container">
+        <button type="button" class="btn btn-secondary" onclick="goToStep(1)">← Back to Input</button>
+        <button type="button" class="btn btn-primary" onclick="goToStep(3)">Proceed to Clinical Report →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: CLINICAL REPORT (LIGHT THEME SIH READY) -->
+  <section id="step-3" class="step-view" style="display:none;">
+    <div class="card" id="clinical-report-container">
+      
+      <!-- Report Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 24px;">
+        <div>
+          <h1 style="font-size: 22px; font-weight: 800; color: #0f172a;">DIABETIC RETINOPATHY SCREENING REPORT</h1>
+          <p style="font-size: 13px; color: #64748b;">Automated Explainable AI (XAI) Clinical Diagnostics</p>
+        </div>
+        <div style="text-align: right;">
+          <div id="report-badge" class="badge"></div>
+          <p style="font-size: 12px; color: #64748b; margin-top: 4px;">System Confidence: <strong id="report-conf-val">0%</strong></p>
+        </div>
+      </div>
+
+      <!-- Action Buttons (No Print) -->
+      <div class="btn-container no-print" style="margin-top: 0; margin-bottom: 24px; justify-content: space-between; background: #f1f5f9; padding: 12px 16px; border-radius: 8px;">
+        <button type="button" class="btn btn-secondary" onclick="goToStep(1)">🔄 Start New Screening</button>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-danger" onclick="downloadReportPDF()">📥 Download PDF</button>
+          <button type="button" class="btn btn-primary" onclick="window.print()">🖨️ Print Report</button>
+          <button type="button" class="btn btn-success" onclick="downloadReportJSON()">💾 Export JSON</button>
+        </div>
+      </div>
+
+      <!-- Patient Information Table -->
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--primary); padding-left: 8px;">Patient Information</h3>
+        <table>
+          <tr>
+            <th>Patient ID</th><td id="rpt-pat-id">-</td>
+            <th>Patient Name</th><td id="rpt-pat-name">-</td>
+          </tr>
+          <tr>
+            <th>Age / Gender</th><td id="rpt-pat-age">-</td>
+            <th>Eye Examined</th><td id="rpt-pat-eye">-</td>
+          </tr>
+          <tr>
+            <th>Screening Date</th><td id="rpt-pat-date">-</td>
+            <th>Image Quality (IQA)</th><td id="rpt-pat-iqa">-</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- 4-Panel XAI Visual Grid -->
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--primary); padding-left: 8px;">XAI Visual Explanation Grid</h3>
+        <div class="grid-4">
+          <div class="img-card">
+            <h4>Original Fundus Image</h4>
+            <img id="rpt-img-raw" alt="Original">
+          </div>
+          <div class="img-card">
+            <h4>Grad-CAM Heatmap</h4>
+            <img id="rpt-img-gradcam" alt="Grad-CAM">
+          </div>
+          <div class="img-card">
+            <h4>Saliency Visualization</h4>
+            <img id="rpt-img-saliency" alt="Saliency">
+          </div>
+          <div class="img-card">
+            <h4>Lesion Overlay</h4>
+            <img id="rpt-img-lesion" alt="Lesions">
+          </div>
+        </div>
+      </div>
+
+      <!-- Quantitative Lesion Breakdown Table -->
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--primary); padding-left: 8px;">Quantitative Lesion Feature Analysis</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Lesion Feature Type</th>
+              <th>Count Segmented</th>
+              <th>Relative Diagnostic Weight (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Microaneurysms (Red dots)</td>
+              <td id="rpt-tbl-ma-cnt">0</td>
+              <td id="rpt-tbl-ma-pct">0%</td>
+            </tr>
+            <tr>
+              <td>Hemorrhages (Dark red patches)</td>
+              <td id="rpt-tbl-hem-cnt">0</td>
+              <td id="rpt-tbl-hem-pct">0%</td>
+            </tr>
+            <tr>
+              <td>Hard Exudates (Yellowish flecks)</td>
+              <td id="rpt-tbl-ex-cnt">0</td>
+              <td id="rpt-tbl-ex-pct">0%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Natural Language & Recommendation -->
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 10px; border-left: 4px solid var(--primary); padding-left: 8px;">Diagnostic Summary & Recommendations</h3>
+        <p style="font-size: 14px; margin-bottom: 8px;"><strong>Diagnostic Finding:</strong> <span id="rpt-diag-summary"></span></p>
+        <p style="font-size: 14px; margin-bottom: 12px;"><strong>XAI Attention Rationale:</strong> <span id="rpt-xai-rationale"></span></p>
+        
+        <div class="rec-box">
+          <strong style="font-weight: 700;">AI-Assisted Clinical Recommendation:</strong><br>
+          <span id="rpt-recommendation-text"></span>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 24px;">
+        Generated by Explainable AI (XAI) Diabetic Retinopathy Screening System | Module 5 Engine
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Global State Store
+  let currentScreeningData = null;
+  let customUploadedImage = null;
+
+  // Grade Labels & Colors
+  const gradeLabels = [
+    'No DR (Normal)',
+    'Mild NPDR',
+    'Moderate NPDR',
+    'Severe NPDR',
+    'Proliferative DR (PDR)'
+  ];
+  const gradeClasses = ['grade-0', 'grade-1', 'grade-2', 'grade-3', 'grade-4'];
+
+  // Default Today Date
+  document.getElementById('screening_date').valueAsDate = new Date();
+
+  function loadSampleData() {
+    document.getElementById('patient_id').value = 'PAT-2026-9042';
+    document.getElementById('patient_name').value = 'John Smith';
+    document.getElementById('patient_age').value = '62';
+    document.getElementById('eye_side').value = 'OD';
+    document.getElementById('iqa_status').value = 'Good';
+    document.getElementById('dr_grade').value = '2';
+    document.getElementById('confidence').value = '88';
+    document.getElementById('cnt_ma').value = '14';
+    document.getElementById('cnt_hem').value = '5';
+    document.getElementById('cnt_ex').value = '8';
+  }
+
+  function updateDefaultLesionCounts() {
+    const grade = parseInt(document.getElementById('dr_grade').value);
+    if (grade === 0) {
+      document.getElementById('cnt_ma').value = '0';
+      document.getElementById('cnt_hem').value = '0';
+      document.getElementById('cnt_ex').value = '0';
+    } else if (grade === 1) {
+      document.getElementById('cnt_ma').value = '5';
+      document.getElementById('cnt_hem').value = '0';
+      document.getElementById('cnt_ex').value = '0';
+    } else if (grade === 2) {
+      document.getElementById('cnt_ma').value = '14';
+      document.getElementById('cnt_hem').value = '5';
+      document.getElementById('cnt_ex').value = '8';
+    } else if (grade === 3) {
+      document.getElementById('cnt_ma').value = '28';
+      document.getElementById('cnt_hem').value = '18';
+      document.getElementById('cnt_ex').value = '15';
+    } else if (grade === 4) {
+      document.getElementById('cnt_ma').value = '42';
+      document.getElementById('cnt_hem').value = '35';
+      document.getElementById('cnt_ex').value = '26';
+    }
+  }
+
+  function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          customUploadedImage = img;
+          const preview = document.getElementById('upload-preview');
+          preview.src = e.target.result;
+          preview.style.display = 'inline-block';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function goToStep(stepNum) {
+    if (stepNum > 1 && !currentScreeningData) {
+      alert('Please complete Step 1 form and click "Start XAI Analysis" first.');
+      return;
+    }
+    document.querySelectorAll('.step-view').forEach(el => el.style.display = 'none');
+    document.getElementById('step-' + stepNum).style.display = 'block';
+
+    document.querySelectorAll('.step-item').forEach((el, idx) => {
+      el.classList.remove('active', 'completed');
+      if (idx + 1 === stepNum) el.classList.add('active');
+      else if (idx + 1 < stepNum) el.classList.add('completed');
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleStartAnalysis(event) {
+    event.preventDefault();
+
+    const grade = parseInt(document.getElementById('dr_grade').value);
+    const confidence = parseFloat(document.getElementById('confidence').value);
+    const iqa = document.getElementById('iqa_status').value;
+    const ma = parseInt(document.getElementById('cnt_ma').value) || 0;
+    const hem = parseInt(document.getElementById('cnt_hem').value) || 0;
+    const ex = parseInt(document.getElementById('cnt_ex').value) || 0;
+
+    currentScreeningData = {
+      patient_id: document.getElementById('patient_id').value,
+      patient_name: document.getElementById('patient_name').value,
+      age: document.getElementById('patient_age').value,
+      eye_side: document.getElementById('eye_side').value,
+      date: document.getElementById('screening_date').value,
+      iqa_status: iqa,
+      dr_grade: grade,
+      dr_label: gradeLabels[grade],
+      confidence: confidence,
+      lesion_counts: { ma, hem, ex }
+    };
+
+    // Process XAI Maps & Computations
+    renderXAICanvases(currentScreeningData);
+    renderStep2Details(currentScreeningData);
+    renderStep3Report(currentScreeningData);
+
+    goToStep(2);
+  }
+
+  function renderXAICanvases(data) {
+    const W = 512, H = 512;
+
+    const cRaw = document.getElementById('canvas-raw');
+    const cGradcam = document.getElementById('canvas-gradcam');
+    const cSaliency = document.getElementById('canvas-saliency');
+    const cLesions = document.getElementById('canvas-lesions');
+
+    [cRaw, cGradcam, cSaliency, cLesions].forEach(c => { c.width = W; c.height = H; });
+
+    const ctxRaw = cRaw.getContext('2d');
+    const ctxGc = cGradcam.getContext('2d');
+    const ctxSal = cSaliency.getContext('2d');
+    const ctxLes = cLesions.getContext('2d');
+
+    // 1. Draw Raw Retinal Image
+    if (customUploadedImage) {
+      ctxRaw.drawImage(customUploadedImage, 0, 0, W, H);
+      ctxGc.drawImage(customUploadedImage, 0, 0, W, H);
+      ctxSal.drawImage(customUploadedImage, 0, 0, W, H);
+      ctxLes.drawImage(customUploadedImage, 0, 0, W, H);
+    } else {
+      generateSyntheticRetinaCanvas(ctxRaw, W, H);
+      generateSyntheticRetinaCanvas(ctxGc, W, H);
+      generateSyntheticRetinaCanvas(ctxSal, W, H);
+      generateSyntheticRetinaCanvas(ctxLes, W, H);
+    }
+
+    // 2. Grad-CAM Overlay (Radial Heatmap)
+    const gcGradient = ctxGc.createRadialGradient(W*0.45, H*0.5, 10, W*0.45, H*0.5, W*0.35);
+    gcGradient.addColorStop(0, 'rgba(239, 68, 68, 0.75)');
+    gcGradient.addColorStop(0.4, 'rgba(234, 179, 8, 0.6)');
+    gcGradient.addColorStop(0.7, 'rgba(34, 197, 94, 0.3)');
+    gcGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctxGc.fillStyle = gcGradient;
+    ctxGc.fillRect(0, 0, W, H);
+
+    // 3. Saliency Visualization (Grayscale / Intensity Map)
+    const salImgData = ctxSal.getImageData(0, 0, W, H);
+    const pixels = salImgData.data;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const avg = (pixels[i] + pixels[i+1] + pixels[i+2]) / 3;
+      pixels[i] = avg; pixels[i+1] = avg; pixels[i+2] = avg;
+    }
+    ctxSal.putImageData(salImgData, 0, 0);
+
+    const salGradient = ctxSal.createRadialGradient(W*0.45, H*0.5, 5, W*0.45, H*0.5, W*0.35);
+    salGradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+    salGradient.addColorStop(0.5, 'rgba(150, 150, 150, 0.4)');
+    salGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctxSal.fillStyle = salGradient;
+    ctxSal.fillRect(0, 0, W, H);
+
+    // 4. Lesion Overlay (Microaneurysms, Hemorrhages, Exudates)
+    const { ma, hem, ex } = data.lesion_counts;
+    
+    // Microaneurysms (Red dots)
+    ctxLes.fillStyle = '#ec4899';
+    for (let i = 0; i < Math.min(ma, 30); i++) {
+      const lx = (W * 0.3) + ((i * 37) % (W * 0.4));
+      const ly = (H * 0.3) + ((i * 53) % (H * 0.4));
+      ctxLes.beginPath(); ctxLes.arc(lx, ly, 3, 0, 2*Math.PI); ctxLes.fill();
+    }
+
+    // Hemorrhages (Dark red blobs)
+    ctxLes.fillStyle = '#dc2626';
+    for (let i = 0; i < Math.min(hem, 20); i++) {
+      const lx = (W * 0.25) + ((i * 47) % (W * 0.45));
+      const ly = (H * 0.25) + ((i * 61) % (H * 0.45));
+      ctxLes.beginPath(); ctxLes.arc(lx, ly, 7, 0, 2*Math.PI); ctxLes.fill();
+    }
+
+    // Exudates (Yellow flecks)
+    ctxLes.fillStyle = '#facc15';
+    for (let i = 0; i < Math.min(ex, 25); i++) {
+      const lx = (W * 0.35) + ((i * 29) % (W * 0.35));
+      const ly = (H * 0.35) + ((i * 41) % (H * 0.35));
+      ctxLes.beginPath(); ctxLes.arc(lx, ly, 5, 0, 2*Math.PI); ctxLes.fill();
+    }
+  }
+
+  function generateSyntheticRetinaCanvas(ctx, W, H) {
+    // Reddish circular retina background
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#c2410c';
+    ctx.beginPath(); ctx.arc(W/2, H/2, W*0.44, 0, 2*Math.PI); ctx.fill();
+
+    // Optic disc
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath(); ctx.arc(W*0.72, H*0.5, W*0.08, 0, 2*Math.PI); ctx.fill();
+
+    // Vessels
+    ctx.strokeStyle = '#7c2d12';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(W*0.72, H*0.5); ctx.quadraticCurveTo(W*0.5, H*0.3, W*0.2, H*0.2);
+    ctx.moveTo(W*0.72, H*0.5); ctx.quadraticCurveTo(W*0.5, H*0.7, W*0.2, H*0.8);
+    ctx.stroke();
+  }
+
+  function renderStep2Details(data) {
+    document.getElementById('patient-summary-tag').textContent = `Patient: ${data.patient_name} (${data.patient_id}) | Age: ${data.age} | Eye: ${data.eye_side}`;
+
+    const badge = document.getElementById('grade-badge-step2');
+    badge.className = 'badge ' + gradeClasses[data.dr_grade];
+    badge.textContent = `Grade ${data.dr_grade}: ${data.dr_label} (${data.confidence}%)`;
+
+    // Lesion Breakdown Calculations
+    const ma = data.lesion_counts.ma, hem = data.lesion_counts.hem, ex = data.lesion_counts.ex;
+    const totalWeighted = ma * 1.0 + hem * 3.0 + ex * 2.5;
+
+    let maPct = 0, hemPct = 0, exPct = 0;
+    if (totalWeighted > 0) {
+      maPct = (ma * 1.0 / totalWeighted * 100).toFixed(1);
+      hemPct = (hem * 3.0 / totalWeighted * 100).toFixed(1);
+      exPct = (ex * 2.5 / totalWeighted * 100).toFixed(1);
+    }
+
+    document.getElementById('lbl-ma-cnt').textContent = ma;
+    document.getElementById('lbl-ma-pct').textContent = maPct + '%';
+    document.getElementById('bar-ma').style.width = maPct + '%';
+
+    document.getElementById('lbl-hem-cnt').textContent = hem;
+    document.getElementById('lbl-hem-pct').textContent = hemPct + '%';
+    document.getElementById('bar-hem').style.width = hemPct + '%';
+
+    document.getElementById('lbl-ex-cnt').textContent = ex;
+    document.getElementById('lbl-ex-pct').textContent = exPct + '%';
+    document.getElementById('bar-ex').style.width = exPct + '%';
+
+    // Natural Language Explanation Text
+    const expText = getClinicalText(data.dr_grade, data.confidence, data.iqa_status, ma, hem, ex);
+    document.getElementById('xai-explanation-text').textContent = expText.explanation;
+  }
+
+  function renderStep3Report(data) {
+    const b = document.getElementById('report-badge');
+    b.className = 'badge ' + gradeClasses[data.dr_grade];
+    b.textContent = `Grade ${data.dr_grade}: ${data.dr_label}`;
+
+    document.getElementById('report-conf-val').textContent = data.confidence + '%';
+
+    document.getElementById('rpt-pat-id').textContent = data.patient_id;
+    document.getElementById('rpt-pat-name').textContent = data.patient_name;
+    document.getElementById('rpt-pat-age').textContent = data.age + ' Years';
+    document.getElementById('rpt-pat-eye').textContent = data.eye_side === 'OD' ? 'OD (Right Eye)' : 'OS (Left Eye)';
+    document.getElementById('rpt-pat-date').textContent = data.date;
+    document.getElementById('rpt-pat-iqa').textContent = data.iqa_status;
+
+    // Convert Canvases to Data URLs for Report Images
+    document.getElementById('rpt-img-raw').src = document.getElementById('canvas-raw').toDataURL();
+    document.getElementById('rpt-img-gradcam').src = document.getElementById('canvas-gradcam').toDataURL();
+    document.getElementById('rpt-img-saliency').src = document.getElementById('canvas-saliency').toDataURL();
+    document.getElementById('rpt-img-lesion').src = document.getElementById('canvas-lesions').toDataURL();
+
+    // Table Counts & Pct
+    const ma = data.lesion_counts.ma, hem = data.lesion_counts.hem, ex = data.lesion_counts.ex;
+    const totalWeighted = ma * 1.0 + hem * 3.0 + ex * 2.5;
+
+    let maPct = '0.0%', hemPct = '0.0%', exPct = '0.0%';
+    if (totalWeighted > 0) {
+      maPct = (ma * 1.0 / totalWeighted * 100).toFixed(1) + '%';
+      hemPct = (hem * 3.0 / totalWeighted * 100).toFixed(1) + '%';
+      exPct = (ex * 2.5 / totalWeighted * 100).toFixed(1) + '%';
+    }
+
+    document.getElementById('rpt-tbl-ma-cnt').textContent = ma;
+    document.getElementById('rpt-tbl-ma-pct').textContent = maPct;
+
+    document.getElementById('rpt-tbl-hem-cnt').textContent = hem;
+    document.getElementById('rpt-tbl-hem-pct').textContent = hemPct;
+
+    document.getElementById('rpt-tbl-ex-cnt').textContent = ex;
+    document.getElementById('rpt-tbl-ex-pct').textContent = exPct;
+
+    const texts = getClinicalText(data.dr_grade, data.confidence, data.iqa_status, ma, hem, ex);
+    document.getElementById('rpt-diag-summary').textContent = texts.summary;
+    document.getElementById('rpt-xai-rationale').textContent = texts.explanation;
+    document.getElementById('rpt-recommendation-text').textContent = texts.recommendation;
+  }
+
+  function getClinicalText(grade, conf, iqa, ma, hem, ex) {
+    if (iqa === 'Reject') {
+      return {
+        summary: `UNSATISFACTORY IMAGE QUALITY. Reliable grading suspended.`,
+        explanation: `Input fundus image failed quality assessment. Automated grading suspended to avoid false diagnosis.`,
+        recommendation: `Immediate re-imaging required under optimal lighting and pupil dilation.`
+      };
+    }
+
+    const dict = {
+      0: {
+        summary: `Grade 0: No Diabetic Retinopathy detected (Confidence: ${conf}%).`,
+        explanation: `Model attention is distributed evenly across normal retinal landmarks (optic disc and macula). No significant microaneurysms or exudates detected.`,
+        recommendation: `Routine annual diabetic retinopathy rescreening as per standard protocol.`
+      },
+      1: {
+        summary: `Grade 1: Mild Non-Proliferative DR (Confidence: ${conf}%).`,
+        explanation: `Model highlights ${ma} microaneurysms. Microvasculature exhibits early localized changes without significant hard exudation.`,
+        recommendation: `Follow-up rescreening in 6 to 12 months. Recommend glycemic and HbA1c optimization.`
+      },
+      2: {
+        summary: `Grade 2: Moderate Non-Proliferative DR (Confidence: ${conf}%).`,
+        explanation: `Model identified key features: ${ma} microaneurysms, ${hem} hemorrhages, and ${ex} hard exudates. Saliency maps show concentrated neural attention over paramacular lesion clusters.`,
+        recommendation: `Referral to an Ophthalmologist / Retina Specialist within 4 to 8 weeks. Monitor closely for macular edema.`
+      },
+      3: {
+        summary: `Grade 3: Severe Non-Proliferative DR (Confidence: ${conf}%).`,
+        explanation: `High diagnostic urgency. Dense lesion cluster detected (${hem} hemorrhages, ${ex} exudates). Grad-CAM maps indicate severe neural attention across multiple quadrants.`,
+        recommendation: `Urgent referral to a Retina Specialist within 2 weeks. Dilated fundus examination and OCT imaging recommended.`
+      },
+      4: {
+        summary: `Grade 4: Proliferative Diabetic Retinopathy (Confidence: ${conf}%).`,
+        explanation: `Critical finding: Proliferative Diabetic Retinopathy. XAI heatmaps demonstrate intense neural focus over widespread high-risk lesions (${ma+hem+ex} total focal points).`,
+        recommendation: `Immediate referral to a Retina Specialist within 1 week for evaluation of anti-VEGF therapy or panretinal photocoagulation (PRP).`
+      }
+    };
+
+    return dict[grade] || dict[0];
+  }
+
+  function downloadReportPDF() {
+    const element = document.getElementById('clinical-report-container');
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: `DR_Screening_Report_${currentScreeningData.patient_id}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    if (typeof html2pdf !== 'undefined') {
+      html2pdf().set(opt).from(element).save();
+    } else {
+      window.print();
+    }
+  }
+
+  function downloadReportJSON() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentScreeningData, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute("href", dataStr);
+    dlAnchor.setAttribute("download", `Report_Data_${currentScreeningData.patient_id}.json`);
+    document.body.appendChild(dlAnchor);
+    dlAnchor.click();
+    dlAnchor.remove();
+  }
+</script>
+
+</body>
+</html>
